@@ -65,19 +65,20 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
         thinking={"type": "adaptive"}, tools=tools, messages=messages,
     )
 
-    answer = ""
-    turns = 1
-    while response.stop_reason == "tool_use" and turns < MAX_TOOL_CALLS:
-        messages.append({"role": "assistant", "content": text_of(response)})
-        messages.append({"role": "user", "content": tool_results(response)})
-        answer = text_of(response)
+    tool_calls = 0
+    while response.stop_reason == "tool_use" and tool_calls < MAX_TOOL_CALLS:
+        results = tool_results(response)
+        tool_calls += len(results)
+        messages.append({"role": "assistant", "content": response.content})
+        messages.append({"role": "user", "content": results})
         response = client.messages.create(
             model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
             thinking={"type": "adaptive"}, tools=tools, messages=messages,
         )
-        turns += 1
 
-    return answer
+    if response.stop_reason == "tool_use":
+        return "I'm handing this to a colleague who can finish it for you."
+    return text_of(response)
 
 
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
@@ -119,17 +120,32 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
                 "type": "object",
                 "properties": {
                     "flight_no": {"type": "string"},
-                    "date": {"type": "string", "description": "MM/DD/YYYY"},
+                    "date": {"type": "string", "description": "YYYY-MM-DD (ISO-8601)"},
                 },
                 "required": ["flight_no", "date"],
             },
         },
         {
             "name": "search_alternatives",
-            "description": "search",
+            "description": ( 
+                "Find replacement Larkspur and Larkspur Link flights for the disrupted segment "
+                "on this PNR. Route, date, cabin and party size are read from the booking; you "
+                "only pass the PNR. Returns up to 7 options, each with an option_id, flight "
+                "numbers, date, local departure/arrival times, stops, cabin, seats_available "
+                "and operating carrier. The original flight, departed flights, cancelled or "
+                "diverted flights, and flights without enough seats for the whole party are "
+                "never offered; some of them appear under 'excluded' with a reason. "
+                "'other_cabin_options' lists seats in a different cabin, which are not "
+                "equivalent and are never offered without saying so. Use this after "
+                "lookup_booking and get_flight_status confirm a disruption. Use only option_ids "
+                "returned here for hold_seat and check_policy's chosen_option_id; never "
+                "construct one. An empty options list means no same-cabin seat on this search, "
+                "not that no seat exists at all."
+            ),
             "input_schema": {
                 "type": "object",
-                "properties": {"pnr": {"type": "string"}},
+                "properties": {"pnr": {"type": "string", "description": "Confirmation code from lookup_booking"}
+                },
                 "required": ["pnr"],
             },
         },
