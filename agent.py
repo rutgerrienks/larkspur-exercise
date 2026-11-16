@@ -17,8 +17,74 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+EXTRA_TOOLS: List[Dict[str, Any]] = [   # ✏️ Build 2, step 2.1: schemas for the tools you add
+    {
+        "name": "next_available_day",
+        "description": (
+            "Find the earliest date with an open seat on a route (origin to destination, "
+            "in one cabin), across every Larkspur flight on that route, not just the "
+            "customer's original flight number. Use it when the customer asks when they "
+            "can fly at the earliest, or when search_alternatives returned no options. "
+            "Take origin, dest, date and cabin from the segment lookup_booking returned. "
+            "Returns only a date, or null if no seat exists in the data. It returns no "
+            "flight, no times and no option_id, so it cannot be held: tell the customer "
+            "the date, and never pass it to hold_seat or invent an option_id for it."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "origin": {"type": "string", "description": "IATA code, e.g. DEN"},
+                "dest": {"type": "string", "description": "IATA code, e.g. AUS"},
+                "date": {"type": "string", "description": "YYYY-MM-DD (ISO-8601): the disrupted segment's date"},
+                "cabin": {"type": "string", "enum": ["Y", "J"], "description": "The booked cabin from lookup_booking"},
+            },
+            "required": ["origin", "dest", "date"],
+        },
+    },
+    {
+        "name": "fare_rules",
+        "description": (
+            "Read the Larkspur Handbook text (fare rules and Customer Commitment) behind "
+            "an entitlement. Call it when the customer asks whether they also get "
+            "something more, such as 'don't I get a hotel too?', or challenges why "
+            "something is or is not covered, so you can quote the rule instead of "
+            "paraphrasing it. Call check_policy first: it decides what is owed, and this "
+            "text only explains it. For hotel, meal and ground care read section 6 "
+            "('care while you wait'): a hotel is covered only for an overnight stay "
+            "away from the home airport caused within Larkspur's control (maintenance, "
+            "crew), and always needs an agent's approval, so offer escalate_to_human, "
+            "never issue a hotel voucher yourself. Weather, ATC and security mean no "
+            "hotel, only a distressed-traveler rate (Summit: courtesy hotel at an "
+            "agent's discretion). Other sections: 4 fare families, 5 delays/cancellations/"
+            "diversions, 7 what chat will not do. Returns that section's full text."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "section": {
+                    "type": "string",
+                    "description": ("A section number like '6', or words from its title: "
+                                    "'fare families', 'when we delay', 'care while you "
+                                    "wait', 'chat automation'."),
+                },
+            },
+            "required": ["section"],
+        },
+    },
+]
+
+
+def fare_rules(section: str) -> str:
+    """The Handbook lookup the MCP server already implements; text only."""
+    from support.mcp_server import tool_fare_rules
+    text, _is_error = tool_fare_rules(section)
+    return text
+
+
+LOCAL_TOOLS: Dict[str, Any] = {          # ✏️ Build 2, step 2.1: the functions behind them
+    "next_available_day": next_available_day,
+    "fare_rules": fare_rules,
+}
 
 
 def text_of(response) -> str:
