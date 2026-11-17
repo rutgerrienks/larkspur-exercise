@@ -8,7 +8,7 @@ Number: For five different ticket types the average amount of input tokens is 13
 Safety check: Nothing irreversible happens without the customer. There is no auto transferral of (large amounts of) money, hotel approvements or vouchers as these are transferred to humans. 
 Next: We'd run through all the possible dialogue options given the data collected from the transcripts to try to cover as much relevant scenario as possible using a nice prioritization mechanism provided by the lever
 Still broken: next_available_day does not know how many people are travelling. It is just considering one individual. Also there are no guardrails for the tone of the response yet
-Lever: <cost | speed | intelligence>
+Lever: cost
 
 ## Priya asked
 
