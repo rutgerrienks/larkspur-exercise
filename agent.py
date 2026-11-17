@@ -123,11 +123,15 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ‚úèÔ∏
     client, tracer = new_session()
     tools = tool_list()
     messages = [
-        {"role": "user", "content": f"PNR {pnr}, last name {last_name}. {message}"},
+        # The clock line changes every second, so it sits in the first user turn, after
+        # the cached prefix (tools, then system), not at the front of the system prompt.
+        {"role": "user", "content": f"{runtime_preamble()}PNR {pnr}, last name {last_name}. {message}"},
     ]
 
     response = client.messages.create(
-        model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
+        model=MODEL, max_tokens=4096, system=SYSTEM_PROMPT + TONE_ADDENDUM,
+        cache_control={"type": "ephemeral"},
+        output_config={"effort": "medium"}, #nieuwe optimizer!
         thinking={"type": "adaptive"}, tools=tools, messages=messages,
     )
 
@@ -138,7 +142,9 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ‚úèÔ∏
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": results})
         response = client.messages.create(
-            model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
+            model=MODEL, max_tokens=4096, system=SYSTEM_PROMPT + TONE_ADDENDUM,
+            cache_control={"type": "ephemeral"},
+            output_config={"effort": "medium"}, #nieuwe optimizer!
             thinking={"type": "adaptive"}, tools=tools, messages=messages,
         )
 
